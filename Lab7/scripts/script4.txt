@@ -1,0 +1,5 @@
+execute_script /Users/vladislavdyadev/Programming_Labs/lab5_prog/Lab5/scripts/script3.txt
+101
+102
+103
+show

@@ -1,0 +1,14 @@
+show
+info
+add
+БИЛЕТ
+2
+200
+100
+VIP
+да
+12
+12
+12
+нет
+execute_script /Users/vladislavdyadev/Programming_Labs/lab5_prog/Lab5/scripts/script2.txt

@@ -1,0 +1,1 @@
+execute_script /Users/vladislavdyadev/Programming_Labs/lab5_prog/Lab5/scripts/recursive1.txt
