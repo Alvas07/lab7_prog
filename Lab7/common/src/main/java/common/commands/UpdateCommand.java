@@ -1,13 +1,16 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.ObjectCreationException;
+import common.exceptions.WrongArgumentException;
 import common.managers.CollectionManager;
 import common.managers.ScannerManager;
 import common.managers.ScriptManager;
 import common.network.*;
 import common.utils.generators.TicketGenerator;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "update".
@@ -50,6 +53,14 @@ public class UpdateCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
@@ -61,9 +72,9 @@ public class UpdateCommand implements Command {
     try {
       int id = Integer.parseInt(args[0]);
       Ticket ticket = ((RequestBodyWithTicket) body).getTicket();
-      collectionManager.updateTicket(id, ticket);
+      collectionManager.updateTicket(id, ticket, request.getAuth().username());
       return new Response("Элемент с id=" + id + " обновлен.");
-    } catch (NumberFormatException e) {
+    } catch (NumberFormatException | WrongArgumentException | SQLException e) {
       return new ResponseWithException(e);
     }
   }
@@ -76,9 +87,7 @@ public class UpdateCommand implements Command {
 
     Ticket ticket;
     try {
-      ticket =
-          new TicketGenerator(collectionManager.getIdManager(), scriptManager, scannerManager)
-              .create();
+      ticket = new TicketGenerator(scriptManager, scannerManager).create();
       Integer.parseInt(args[0]);
     } catch (ObjectCreationException | NumberFormatException e) {
       throw new CommandExecuteException(e.getMessage());

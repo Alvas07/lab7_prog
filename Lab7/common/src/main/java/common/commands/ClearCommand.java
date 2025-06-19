@@ -1,10 +1,13 @@
 package common.commands;
 
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.managers.CollectionManager;
 import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
+import common.network.ResponseWithException;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "clear".
@@ -34,8 +37,20 @@ public class ClearCommand implements Command {
 
   @Override
   public Response execute(Request request) {
-    collectionManager.clearCollection();
-    return new Response("Коллекция очищена.");
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
+    try {
+      collectionManager.clearCollection(request.getAuth().username());
+      return new Response("Коллекция очищена.");
+    } catch (SQLException e) {
+      return new ResponseWithException(e);
+    }
   }
 
   @Override

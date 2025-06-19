@@ -1,10 +1,12 @@
 package common.commands;
 
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.managers.CollectionManager;
 import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
+import common.network.ResponseWithException;
 
 /**
  * Класс, отвечающий за команду "info".
@@ -34,6 +36,14 @@ public class InfoCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     StringBuilder sb = new StringBuilder();
     sb.append("ИНФОРМАЦИЯ О КОЛЛЕКЦИИ\n")
         .append("Тип коллекции: ")

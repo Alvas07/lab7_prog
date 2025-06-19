@@ -1,15 +1,16 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.ObjectCreationException;
 import common.exceptions.WrongArgumentException;
 import common.managers.CollectionManager;
-import common.managers.IdManager;
 import common.managers.ScannerManager;
 import common.managers.ScriptManager;
 import common.network.*;
 import common.utils.generators.TicketGenerator;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "add".
@@ -53,6 +54,14 @@ public class AddCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
@@ -61,11 +70,10 @@ public class AddCommand implements Command {
 
     try {
       Ticket ticket = ((RequestBodyWithTicket) body).getTicket();
-      IdManager idManager = collectionManager.getIdManager();
-      ticket.setId(idManager.getAndIncrement());
+      ticket.setOwnerUsername(request.getAuth().username());
       collectionManager.addTicket(ticket);
       return new Response("Билет успешно добавлен.");
-    } catch (WrongArgumentException e) {
+    } catch (WrongArgumentException | SQLException e) {
       return new ResponseWithException(e);
     }
   }
@@ -78,9 +86,7 @@ public class AddCommand implements Command {
 
     Ticket ticket;
     try {
-      ticket =
-          new TicketGenerator(collectionManager.getIdManager(), scriptManager, scannerManager)
-              .create();
+      ticket = new TicketGenerator(scriptManager, scannerManager).create();
     } catch (ObjectCreationException e) {
       throw new CommandExecuteException(e.getMessage());
     }

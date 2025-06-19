@@ -1,11 +1,13 @@
 package common.commands;
 
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.managers.CollectionManager;
 import common.managers.CommandManager;
 import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
+import common.network.ResponseWithException;
 import java.util.HashMap;
 
 /**
@@ -36,7 +38,15 @@ public class HelpCommand implements Command {
 
   @Override
   public Response execute(Request request) {
-    CommandManager commandManager = new CommandManager(collectionManager, null, null);
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
+    CommandManager commandManager = new CommandManager(collectionManager, null, null, null);
     HashMap<String, Command> commandList = commandManager.getCommandList();
     StringBuilder sb = new StringBuilder();
     sb.append("ДОСТУПНЫЕ КОМАНДЫ:\n");

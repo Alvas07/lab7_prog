@@ -1,6 +1,7 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.ObjectCreationException;
 import common.exceptions.RemoveException;
@@ -9,6 +10,7 @@ import common.managers.ScannerManager;
 import common.managers.ScriptManager;
 import common.network.*;
 import common.utils.generators.TicketGenerator;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "remove_lower".
@@ -52,6 +54,14 @@ public class RemoveLowerCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
@@ -61,12 +71,12 @@ public class RemoveLowerCommand implements Command {
     int size = collectionManager.getCollectionSize();
     try {
       Ticket ticket = ((RequestBodyWithTicket) body).getTicket();
-      collectionManager.removeLower(ticket);
+      collectionManager.removeLower(ticket, request.getAuth().username());
       return new Response(
           "Удалено "
               + (size - collectionManager.getCollectionSize())
               + " элементов, меньших заданного.");
-    } catch (RemoveException e) {
+    } catch (RemoveException | SQLException e) {
       return new ResponseWithException(e);
     }
   }
@@ -79,9 +89,7 @@ public class RemoveLowerCommand implements Command {
 
     Ticket ticket;
     try {
-      ticket =
-          new TicketGenerator(collectionManager.getIdManager(), scriptManager, scannerManager)
-              .create();
+      ticket = new TicketGenerator(scriptManager, scannerManager).create();
     } catch (ObjectCreationException e) {
       throw new CommandExecuteException(e.getMessage());
     }

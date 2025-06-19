@@ -1,6 +1,7 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.EmptyCollectionException;
 import common.managers.CollectionManager;
@@ -39,6 +40,14 @@ public class MaxByCreationDateCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     try {
       return new Response(
           "МАКСИМАЛЬНЫЙ ЭЛЕМЕНТ ПО ДАТЕ СОЗДАНИЯ:\n" + collectionManager.getMaxByDate());
