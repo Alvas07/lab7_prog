@@ -1,6 +1,7 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.ObjectCreationException;
 import common.exceptions.RemoveException;
@@ -52,6 +53,14 @@ public class RemoveLowerCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
@@ -61,7 +70,7 @@ public class RemoveLowerCommand implements Command {
     int size = collectionManager.getCollectionSize();
     try {
       Ticket ticket = ((RequestBodyWithTicket) body).getTicket();
-      collectionManager.removeLower(ticket);
+      collectionManager.removeLower(ticket, request.getAuth().username());
       return new Response(
           "Удалено "
               + (size - collectionManager.getCollectionSize())
@@ -79,9 +88,7 @@ public class RemoveLowerCommand implements Command {
 
     Ticket ticket;
     try {
-      ticket =
-          new TicketGenerator(collectionManager.getIdManager(), scriptManager, scannerManager)
-              .create();
+      ticket = new TicketGenerator(scriptManager, scannerManager).create();
     } catch (ObjectCreationException e) {
       throw new CommandExecuteException(e.getMessage());
     }

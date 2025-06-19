@@ -1,7 +1,6 @@
 package common.utils;
 
 import common.data.*;
-import common.managers.IdManager;
 
 /**
  * Класс, предоставляющий вспомогательные методы для валидации объектов, использующихся в программе.
@@ -14,14 +13,12 @@ public class Validator {
    * Показывает валидность объекта класса {@link Ticket}.
    *
    * @param t объект класса {@link Ticket} для проверки.
-   * @param idManager менеджер {@code id}.
    * @return {@code true} - если объект валиден, {@code false} - если нет.
    * @author Alvas
    * @since 1.0
    */
-  public static boolean isValidTicket(Ticket t, IdManager idManager) {
-    return idManager.idIsUnique(t.getId())
-        && t.getName() != null
+  public static boolean isValidTicket(Ticket t) {
+    return t.getName() != null
         && !t.getName().isEmpty()
         && t.getCoordinates() != null
         && isValidCoordinates(t.getCoordinates())

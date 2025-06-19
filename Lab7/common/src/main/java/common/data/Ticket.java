@@ -36,6 +36,7 @@ public class Ticket implements Comparable<Ticket>, Serializable {
   private float price; // Значение поля должно быть больше 0
   private TicketType type; // Поле не может быть null
   private Person person; // Поле может быть null
+  private String ownerUsername;
   @Serial private static final long serialVersionUID = 23125235290852352L;
 
   /**
@@ -230,6 +231,14 @@ public class Ticket implements Comparable<Ticket>, Serializable {
     this.person = person;
   }
 
+  public String getOwnerUsername() {
+    return ownerUsername;
+  }
+
+  public void setOwnerUsername(String ownerUsername) {
+    this.ownerUsername = ownerUsername;
+  }
+
   /**
    * Сравнивает билет с другим по дате создания.
    *
@@ -278,6 +287,9 @@ public class Ticket implements Comparable<Ticket>, Serializable {
         + type
         + ", person="
         + person
+        + ", ownerUsername='"
+        + ownerUsername
+        + '\''
         + '}';
   }
 }

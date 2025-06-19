@@ -5,14 +5,13 @@ import common.data.TicketType;
 import common.exceptions.EmptyCollectionException;
 import common.exceptions.RemoveException;
 import common.exceptions.WrongArgumentException;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 public interface CollectionManager {
-  ArrayDeque<Ticket> getCollection();
-
-  IdManager getIdManager();
+  Deque<Ticket> getCollection();
 
   LocalDateTime getInitializationTime();
 
@@ -22,19 +21,18 @@ public interface CollectionManager {
 
   int getCollectionSize();
 
-  void clearCollection();
+  int clearCollection(String username) throws SQLException;
 
-  void addTicket(Ticket ticket) throws WrongArgumentException;
-
-  void fillCollection(List<Ticket> tickets);
+  void addTicket(Ticket ticket) throws WrongArgumentException, SQLException;
 
   Ticket getById(int id) throws WrongArgumentException;
 
-  void updateTicket(int id, Ticket newTicket);
+  boolean updateTicket(int id, Ticket newTicket, String username)
+      throws WrongArgumentException, SQLException;
 
-  void removeTicket(Ticket ticket) throws RemoveException;
+  boolean removeTicket(Ticket ticket, String username) throws RemoveException;
 
-  Ticket removeHead() throws RemoveException;
+  Ticket removeHead(String username) throws RemoveException;
 
   float getAveragePrice();
 
@@ -44,7 +42,7 @@ public interface CollectionManager {
 
   Ticket getMaxTicket();
 
-  void removeLower(Ticket ticket) throws RemoveException;
+  void removeLower(Ticket ticket, String username) throws RemoveException;
 
   List<Ticket> getTicketsList();
 }

@@ -1,4 +1,4 @@
-package client.system;
+package client.system.placeholders;
 
 import common.data.Ticket;
 import common.data.TicketType;
@@ -6,20 +6,15 @@ import common.exceptions.EmptyCollectionException;
 import common.exceptions.RemoveException;
 import common.exceptions.WrongArgumentException;
 import common.managers.CollectionManager;
-import common.managers.IdManager;
 import java.time.LocalDateTime;
-import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 
 public class PlaceholderCollectionManager implements CollectionManager {
-  @Override
-  public ArrayDeque<Ticket> getCollection() {
-    return null;
-  }
 
   @Override
-  public IdManager getIdManager() {
-    return new IdManager();
+  public Deque<Ticket> getCollection() {
+    return null;
   }
 
   @Override
@@ -41,13 +36,12 @@ public class PlaceholderCollectionManager implements CollectionManager {
   }
 
   @Override
-  public void clearCollection() {}
+  public int clearCollection(String username) {
+    return 0;
+  }
 
   @Override
   public void addTicket(Ticket ticket) throws WrongArgumentException {}
-
-  @Override
-  public void fillCollection(List<Ticket> tickets) {}
 
   @Override
   public Ticket getById(int id) throws WrongArgumentException {
@@ -55,13 +49,18 @@ public class PlaceholderCollectionManager implements CollectionManager {
   }
 
   @Override
-  public void updateTicket(int id, Ticket newTicket) {}
+  public boolean updateTicket(int id, Ticket newTicket, String username)
+      throws WrongArgumentException {
+    return false;
+  }
 
   @Override
-  public void removeTicket(Ticket ticket) throws RemoveException {}
+  public boolean removeTicket(Ticket ticket, String username) throws RemoveException {
+    return false;
+  }
 
   @Override
-  public Ticket removeHead() throws RemoveException {
+  public Ticket removeHead(String username) throws RemoveException {
     return null;
   }
 
@@ -86,7 +85,7 @@ public class PlaceholderCollectionManager implements CollectionManager {
   }
 
   @Override
-  public void removeLower(Ticket ticket) throws RemoveException {}
+  public void removeLower(Ticket ticket, String username) throws RemoveException {}
 
   @Override
   public List<Ticket> getTicketsList() {

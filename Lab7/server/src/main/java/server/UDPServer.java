@@ -1,9 +1,7 @@
 package server;
 
-import common.exceptions.FileWriteException;
 import common.managers.CollectionManager;
 import common.managers.CommandManager;
-import common.managers.FileManager;
 import common.network.ObjectDecoder;
 import common.network.ObjectEncoder;
 import common.network.Request;
@@ -15,27 +13,41 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class UDPServer {
+  private record RequestTask(Request request, InetSocketAddress clientAddress) {}
+
+  private record ResponseTask(Response response, InetSocketAddress clientAddress) {}
+
   private final int BUFFER_SIZE = 65535;
   private final int SELECTOR_TIMEOUT = 100;
   private final CommandManager commandManager;
   private final CollectionManager collectionManager;
-  private final FileManager fileManager;
-  private final ExecutorService requestPool = Executors.newCachedThreadPool();
   private static final Logger logger = LogManager.getLogger();
   private final BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
-  private boolean isRunning = true;
+  private final AtomicBoolean isRunning = new AtomicBoolean(true);
+  private final ReentrantLock selectorLock = new ReentrantLock();
 
-  public UDPServer(
-      CommandManager commandManager, CollectionManager collectionManager, FileManager fileManager) {
+  // чтение запросов
+  private final ExecutorService readPool = Executors.newCachedThreadPool();
+  // обработка запросов
+  private final ForkJoinPool processPool = new ForkJoinPool();
+  // отправка ответов
+  private final ExecutorService sendPool = Executors.newCachedThreadPool();
+
+  // очередь для обработки запросов
+  private final BlockingQueue<RequestTask> requestQueue = new LinkedBlockingQueue<>();
+  // очередь для отправки ответов
+  private final BlockingQueue<ResponseTask> responseQueue = new LinkedBlockingQueue<>();
+
+  public UDPServer(CommandManager commandManager, CollectionManager collectionManager) {
     this.commandManager = commandManager;
     this.collectionManager = collectionManager;
-    this.fileManager = fileManager;
   }
 
   public void runServer(int port) throws IOException {
@@ -47,11 +59,13 @@ public class UDPServer {
 
       logger.info("Сервер запущен на порту " + port);
 
+      startProcessingWorkers();
+
       ByteBuffer receiveBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 
-      while (isRunning) {
+      while (isRunning.get()) {
         if (isConsoleInput()) {
-          shutdown(selector, channel);
+          shutdown();
           return;
         }
 
@@ -70,21 +84,90 @@ public class UDPServer {
                   (InetSocketAddress) clientChannel.receive(receiveBuffer);
 
               if (clientAddress != null) {
-                Request request = (Request) ObjectDecoder.decodeObject(receiveBuffer);
-                logger.info("Сервер получил запрос с командой " + request.getCommandName());
+                receiveBuffer.flip();
+                byte[] data = new byte[receiveBuffer.remaining()];
+                receiveBuffer.get(data);
+                receiveBuffer.clear();
 
-                Response response = commandManager.executeRequest(request);
-
-                ByteBuffer sendBuffer = ObjectEncoder.encodeObject(response);
-                channel.send(sendBuffer, clientAddress);
-                logger.info("Сервер отправил ответ: " + response.getMessage());
+                readPool.execute(() -> handleData(data, clientAddress, selector));
               }
             }
-          } catch (ClassNotFoundException e) {
+          } catch (IOException e) {
             logger.error("Возникла ошибка на сервере: " + e.getMessage());
           }
         }
       }
+    }
+  }
+
+  private void startProcessingWorkers() {
+    for (int i = 0; i < Runtime.getRuntime().availableProcessors(); i++) {
+      readPool.execute(this::requestReader);
+      sendPool.execute(this::responseSender);
+    }
+  }
+
+  private void handleData(byte[] data, InetSocketAddress clientAddress, Selector selector) {
+    try {
+      Request request = (Request) ObjectDecoder.decodeObject(ByteBuffer.wrap(data));
+      logger.info("Получен запрос с командой " + request.getCommandName());
+
+      requestQueue.put(new RequestTask(request, clientAddress));
+
+      selectorLock.lock();
+      try {
+        selector.wakeup();
+      } finally {
+        selectorLock.unlock();
+      }
+    } catch (IOException | ClassNotFoundException | InterruptedException e) {
+      logger.error("Возникла ошибка при обработке данных на сервере: " + e.getMessage());
+    }
+  }
+
+  private void requestReader() {
+    while (isRunning.get()) {
+      try {
+        RequestTask task = requestQueue.poll(100, TimeUnit.MILLISECONDS);
+        if (task != null) {
+          processPool.execute(() -> processRequest(task));
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+
+  private void processRequest(RequestTask task) {
+    try {
+      logger.info("Обработка запроса с командой " + task.request().getCommandName());
+      Response response = commandManager.executeRequest(task.request());
+      responseQueue.put(new ResponseTask(response, task.clientAddress()));
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+  }
+
+  private void responseSender() {
+    while (isRunning.get() || !responseQueue.isEmpty()) {
+      try {
+        ResponseTask task = responseQueue.poll(100, TimeUnit.MILLISECONDS);
+        if (task != null) {
+          sendResponse(task);
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+    }
+  }
+
+  private void sendResponse(ResponseTask task) {
+    try (DatagramChannel channel = DatagramChannel.open()) {
+      ByteBuffer sendBuffer = ObjectEncoder.encodeObject(task.response());
+      channel.send(sendBuffer, task.clientAddress());
+      logger.info("Сервер отправил ответ клиенту: " + task.response().getMessage());
+    } catch (IOException e) {
+      logger.error("Возникла ошибка при отправке ответа клиенту: " + e.getMessage());
     }
   }
 
@@ -97,44 +180,37 @@ public class UDPServer {
       switch (commandName) {
         case "shutdown" -> {
           logger.warn("Введена команда 'shutdown'.");
-          System.out.println("Сохранение коллекции перед завершением работы сервера...");
-          try {
-            fileManager.saveCollectionToXml(collectionManager);
-            logger.info("Коллекция сохранена в файл.");
-          } catch (FileWriteException e) {
-            logger.error("Возникла ошибка при сохранении в файл.");
-            System.err.println(e.getMessage());
-          }
           System.out.println("Завершение работы сервера...");
           logger.info("Сервер завершил свою работу.");
           return true;
         }
-        case "save" -> {
-          logger.warn("Введена команда 'save'.");
-          System.out.println("Сохранение коллекции...");
-          try {
-            fileManager.saveCollectionToXml(collectionManager);
-            logger.info("Коллекция сохранена в файл.");
-          } catch (FileWriteException e) {
-            logger.error("Возникла ошибка при сохранении в файл.");
-            System.err.println(e.getMessage());
-          }
-          System.out.println("Коллекция успешно сохранена.");
-          return false;
-        }
         case "" -> {}
-        default ->
-            System.out.println(
-                "Неизвестное имя команды. Введите одну из доступных: shutdown/save.");
+        default -> System.out.println("Неизвестное имя команды. Доступна только команда shutdown.");
       }
     }
     return false;
   }
 
-  private void shutdown(Selector selector, DatagramChannel channel) throws IOException {
-    selector.close();
-    channel.close();
-    requestPool.shutdown();
-    isRunning = false;
+  private void shutdown() {
+    isRunning.set(false);
+
+    shutdownPool(readPool, "ReadPool");
+    shutdownPool(processPool, "ProcessPool");
+    shutdownPool(sendPool, "SendPool");
+
+    logger.info("Сервер завершил работу.");
+  }
+
+  private void shutdownPool(ExecutorService pool, String poolName) {
+    pool.shutdown();
+    try {
+      if (!pool.awaitTermination(100, TimeUnit.MILLISECONDS)) {
+        pool.shutdownNow();
+        logger.warn("Принудительное завершение " + poolName);
+      }
+    } catch (InterruptedException e) {
+      pool.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
   }
 }

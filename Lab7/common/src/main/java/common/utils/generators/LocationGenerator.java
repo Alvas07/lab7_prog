@@ -47,18 +47,14 @@ public class LocationGenerator extends ObjectGenerator<Location> {
   public Location create() throws ObjectCreationException {
     String choice =
         askValue(
-                "Добавить местоположение? (1 - Да, 2 - Нет): ",
-                s ->
-                    (s.equals("1")
-                        || s.equals("2")
-                        || s.equalsIgnoreCase("да")
-                        || s.equalsIgnoreCase("нет")),
+                "Добавить местоположение? (1 - Да, создать нового, 2 - Да, выбрать по id, 3 - Нет): ",
+                s -> (s.equals("1") || s.equals("2") || s.equals("3")),
                 s -> s,
                 scriptManager,
                 scannerManager)
             .toLowerCase();
     return switch (choice) {
-      case "1", "да" -> {
+      case "1" -> {
         System.out.println("Добро пожаловать в Формирователь местоположения.");
         yield new Location(
             askValue(
@@ -80,7 +76,19 @@ public class LocationGenerator extends ObjectGenerator<Location> {
                 scriptManager,
                 scannerManager));
       }
-      case "2", "нет" -> null;
+      case "2" -> {
+        int id =
+            askValue(
+                "ID местоположения: ",
+                x -> (x != null && x > 0),
+                Integer::parseInt,
+                scriptManager,
+                scannerManager);
+        Location location = new Location(null, null, null);
+        location.setId(id);
+        yield location;
+      }
+      case "3" -> null;
       default -> throw new ObjectCreationException("Некорректный выбор.");
     };
   }
