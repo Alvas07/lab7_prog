@@ -10,6 +10,7 @@ import common.managers.ScannerManager;
 import common.managers.ScriptManager;
 import common.network.*;
 import common.utils.generators.TicketGenerator;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "remove_lower".
@@ -75,7 +76,7 @@ public class RemoveLowerCommand implements Command {
           "Удалено "
               + (size - collectionManager.getCollectionSize())
               + " элементов, меньших заданного.");
-    } catch (RemoveException e) {
+    } catch (RemoveException | SQLException e) {
       return new ResponseWithException(e);
     }
   }

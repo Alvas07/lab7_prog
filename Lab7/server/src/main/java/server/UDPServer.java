@@ -40,11 +40,6 @@ public class UDPServer {
   // отправка ответов
   private final ExecutorService sendPool = Executors.newCachedThreadPool();
 
-  // очередь для обработки запросов
-  private final BlockingQueue<RequestTask> requestQueue = new LinkedBlockingQueue<>();
-  // очередь для отправки ответов
-  private final BlockingQueue<ResponseTask> responseQueue = new LinkedBlockingQueue<>();
-
   public UDPServer(CommandManager commandManager, CollectionManager collectionManager) {
     this.commandManager = commandManager;
     this.collectionManager = collectionManager;
@@ -58,8 +53,6 @@ public class UDPServer {
       channel.register(selector, SelectionKey.OP_READ);
 
       logger.info("Сервер запущен на порту " + port);
-
-      startProcessingWorkers();
 
       ByteBuffer receiveBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 
@@ -100,65 +93,21 @@ public class UDPServer {
     }
   }
 
-  private void startProcessingWorkers() {
-    for (int i = 0; i < Runtime.getRuntime().availableProcessors(); i++) {
-      readPool.execute(this::requestReader);
-      sendPool.execute(this::responseSender);
-    }
-  }
-
   private void handleData(byte[] data, InetSocketAddress clientAddress, Selector selector) {
     try {
       Request request = (Request) ObjectDecoder.decodeObject(ByteBuffer.wrap(data));
       logger.info("Получен запрос с командой " + request.getCommandName());
 
-      requestQueue.put(new RequestTask(request, clientAddress));
-
-      selectorLock.lock();
-      try {
-        selector.wakeup();
-      } finally {
-        selectorLock.unlock();
-      }
-    } catch (IOException | ClassNotFoundException | InterruptedException e) {
+      processPool.execute(() -> processRequest(new RequestTask(request, clientAddress)));
+    } catch (IOException | ClassNotFoundException e) {
       logger.error("Возникла ошибка при обработке данных на сервере: " + e.getMessage());
     }
   }
 
-  private void requestReader() {
-    while (isRunning.get()) {
-      try {
-        RequestTask task = requestQueue.poll(100, TimeUnit.MILLISECONDS);
-        if (task != null) {
-          processPool.execute(() -> processRequest(task));
-        }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    }
-  }
-
   private void processRequest(RequestTask task) {
-    try {
-      logger.info("Обработка запроса с командой " + task.request().getCommandName());
-      Response response = commandManager.executeRequest(task.request());
-      responseQueue.put(new ResponseTask(response, task.clientAddress()));
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  private void responseSender() {
-    while (isRunning.get() || !responseQueue.isEmpty()) {
-      try {
-        ResponseTask task = responseQueue.poll(100, TimeUnit.MILLISECONDS);
-        if (task != null) {
-          sendResponse(task);
-        }
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    }
+    logger.info("Обработка запроса с командой " + task.request().getCommandName());
+    Response response = commandManager.executeRequest(task.request());
+    sendPool.execute(() -> sendResponse(new ResponseTask(response, task.clientAddress())));
   }
 
   private void sendResponse(ResponseTask task) {

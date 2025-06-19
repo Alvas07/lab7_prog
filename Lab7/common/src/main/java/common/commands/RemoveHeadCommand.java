@@ -9,6 +9,7 @@ import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
 import common.network.ResponseWithException;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "remove_head".
@@ -50,7 +51,7 @@ public class RemoveHeadCommand implements Command {
     try {
       Ticket head = collectionManager.removeHead(request.getAuth().username());
       return new Response("ПЕРВЫЙ ЭЛЕМЕНТ КОЛЛЕКЦИИ:\n" + head);
-    } catch (RemoveException e) {
+    } catch (RemoveException | SQLException e) {
       return new ResponseWithException(e);
     }
   }

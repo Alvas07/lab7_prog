@@ -23,7 +23,7 @@ public class SqlCollectionManager implements CollectionManager {
   private final LocalDateTime initializationTime;
   private LocalDateTime lastUpdateTime;
 
-  private final String CREATE_TABLE_QUERY =
+  private static final String CREATE_TABLE_QUERY =
       "CREATE TABLE IF NOT EXISTS locations ("
           + "id SERIAL PRIMARY KEY,"
           + "lx BIGINT NOT NULL,"
@@ -50,7 +50,7 @@ public class SqlCollectionManager implements CollectionManager {
           + "CONSTRAINT fk_person FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL,"
           + "CONSTRAINT fk_owner FOREIGN KEY (owner_username) REFERENCES users(username) ON DELETE CASCADE)";
 
-  private final String SELECT_TICKETS_QUERY =
+  private static final String SELECT_TICKETS_QUERY =
       "SELECT t.id, t.name, t.cx AS coordinates_x, t.cy AS coordinates_y, t.creation_date, "
           + "t.price, t.type, p.id AS person_id, p.height AS person_height, p.weight AS person_weight, "
           + "p.passport_id AS person_passport_id, l.id AS location_id, l.lx AS location_x, l.ly AS location_y, l.lz AS location_z, "
@@ -58,6 +58,29 @@ public class SqlCollectionManager implements CollectionManager {
           + "FROM tickets AS t "
           + "LEFT JOIN persons AS p ON t.person_id = p.id "
           + "LEFT JOIN locations AS l ON p.location_id = l.id";
+
+  private static final String SELECT_PERSON_QUERY = "SELECT * FROM persons WHERE id = ?";
+  private static final String SELECT_LOCATION_QUERY = "SELECT * FROM locations WHERE id = ?";
+  private static final String INSERT_PERSON_QUERY =
+      "INSERT INTO persons (height, weight, passport_id, location_id) "
+          + "VALUES (?, ?, ?, ?) RETURNING id";
+  private static final String INSERT_LOCATION_QUERY =
+      "INSERT INTO locations (lx, ly, lz) " + "VALUES (?, ?, ?) RETURNING id";
+  private static final String SELECT_PERSON_ID_QUERY =
+      "SELECT id FROM persons WHERE height = ? AND weight = ? AND passport_id = ? AND location_id = ?";
+  private static final String SELECT_LOCATION_ID_QUERY =
+      "SELECT id FROM locations WHERE lx = ? AND ly = ? AND lz = ?";
+  private static final String DELETE_TICKETS_QUERY = "DELETE FROM tickets WHERE owner_username = ?";
+  private static final String INSERT_TICKET_QUERY =
+      "INSERT INTO tickets (name, cx, cy, creation_date, price, type, person_id, owner_username) "
+          + "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id";
+  private static final String SELECT_OWNER_QUERY =
+      "SELECT owner_username FROM tickets WHERE id = ?";
+  private static final String UPDATE_TICKET_QUERY =
+      "UPDATE tickets SET name = ?, cx = ?, cy = ?, price = ?, type = ?, person_id = ? "
+          + "WHERE id = ? AND owner_username = ?";
+  private static final String DELETE_TICKET_QUERY =
+      "DELETE FROM tickets WHERE id = ? and owner_username = ?";
 
   public SqlCollectionManager(Connection connection) throws SQLException {
     this.connection = connection;
@@ -175,8 +198,7 @@ public class SqlCollectionManager implements CollectionManager {
   }
 
   private Person getPersonById(int id) {
-    try (PreparedStatement statement =
-        connection.prepareStatement("SELECT * FROM persons WHERE id = ?")) {
+    try (PreparedStatement statement = connection.prepareStatement(SELECT_PERSON_QUERY)) {
       statement.setInt(1, id);
       ResultSet resultSet = statement.executeQuery();
       if (resultSet.next()) {
@@ -199,8 +221,7 @@ public class SqlCollectionManager implements CollectionManager {
   }
 
   public Location getLocationById(int id) {
-    try (PreparedStatement statement =
-        connection.prepareStatement("SELECT * FROM locations WHERE id = ?")) {
+    try (PreparedStatement statement = connection.prepareStatement(SELECT_LOCATION_QUERY)) {
       statement.setInt(1, id);
       ResultSet resultSet = statement.executeQuery();
       if (resultSet.next()) {
@@ -224,10 +245,7 @@ public class SqlCollectionManager implements CollectionManager {
       return currentId;
     }
 
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            "INSERT INTO persons (height, weight, passport_id, location_id) "
-                + "VALUES (?, ?, ?, ?) RETURNING id")) {
+    try (PreparedStatement statement = connection.prepareStatement(INSERT_PERSON_QUERY)) {
       preparePersonStatement(statement, person, 0);
       ResultSet resultSet = statement.executeQuery();
       if (resultSet.next()) {
@@ -248,9 +266,7 @@ public class SqlCollectionManager implements CollectionManager {
       return currentId;
     }
 
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            "INSERT INTO locations (lx, ly, lz) " + "VALUES (?, ?, ?) RETURNING id")) {
+    try (PreparedStatement statement = connection.prepareStatement(INSERT_LOCATION_QUERY)) {
       prepareLocationStatement(statement, location, 0);
       ResultSet resultSet = statement.executeQuery();
       if (resultSet.next()) {
@@ -265,9 +281,7 @@ public class SqlCollectionManager implements CollectionManager {
   }
 
   private Integer findPersonId(Person person) throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            "SELECT id FROM persons WHERE height = ? AND weight = ? AND passport_id = ? AND location_id = ?")) {
+    try (PreparedStatement statement = connection.prepareStatement(SELECT_PERSON_ID_QUERY)) {
       statement.setFloat(1, person.getHeight());
       statement.setInt(2, person.getWeight());
       statement.setString(3, person.getPassportID());
@@ -285,9 +299,7 @@ public class SqlCollectionManager implements CollectionManager {
   }
 
   private Integer findLocationID(Location location) throws SQLException {
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            "SELECT id FROM locations WHERE lx = ? AND ly = ? AND lz = ?")) {
+    try (PreparedStatement statement = connection.prepareStatement(SELECT_LOCATION_ID_QUERY)) {
       statement.setLong(1, location.getX());
       statement.setLong(2, location.getY());
       statement.setInt(3, location.getZ());
@@ -364,8 +376,7 @@ public class SqlCollectionManager implements CollectionManager {
   public int clearCollection(String username) throws SQLException {
     int deletedTickets = 0;
 
-    try (PreparedStatement statement =
-        connection.prepareStatement("DELETE FROM tickets WHERE owner_username = ?")) {
+    try (PreparedStatement statement = connection.prepareStatement(DELETE_TICKETS_QUERY)) {
       statement.setString(1, username);
       deletedTickets = statement.executeUpdate();
 
@@ -393,10 +404,7 @@ public class SqlCollectionManager implements CollectionManager {
       throw new WrongArgumentException("Билет не может быть null.");
     }
 
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            "INSERT INTO tickets (name, cx, cy, creation_date, price, type, person_id, owner_username) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id")) {
+    try (PreparedStatement statement = connection.prepareStatement(INSERT_TICKET_QUERY)) {
       Person person = ticket.getPerson();
       Location location;
       if (person != null) {
@@ -432,8 +440,7 @@ public class SqlCollectionManager implements CollectionManager {
   @Override
   public boolean updateTicket(int id, Ticket newTicket, String username)
       throws WrongArgumentException, SQLException {
-    try (PreparedStatement checkStatement =
-        connection.prepareStatement("SELECT owner_username FROM tickets WHERE id = ?")) {
+    try (PreparedStatement checkStatement = connection.prepareStatement(SELECT_OWNER_QUERY)) {
       checkStatement.setInt(1, id);
       ResultSet resultSet = checkStatement.executeQuery();
 
@@ -443,7 +450,7 @@ public class SqlCollectionManager implements CollectionManager {
 
       String owner = resultSet.getString("owner_username");
       if (!owner.equals(username)) {
-        return false;
+        throw new WrongArgumentException("Невозможно изменить билет, который не принадлежит вам.");
       }
 
       Person person = newTicket.getPerson();
@@ -454,10 +461,7 @@ public class SqlCollectionManager implements CollectionManager {
       }
       newTicket.setPerson(checkPerson(person));
 
-      try (PreparedStatement updateStatement =
-          connection.prepareStatement(
-              "UPDATE tickets SET name = ?, cx = ?, cy = ?, price = ?, type = ?, person_id = ? "
-                  + "WHERE id = ? AND owner_username = ?")) {
+      try (PreparedStatement updateStatement = connection.prepareStatement(UPDATE_TICKET_QUERY)) {
         updateStatement.setString(1, newTicket.getName());
         updateStatement.setFloat(2, newTicket.getCoordinates().getX());
         updateStatement.setLong(3, newTicket.getCoordinates().getY());
@@ -493,31 +497,34 @@ public class SqlCollectionManager implements CollectionManager {
   }
 
   @Override
-  public boolean removeTicket(Ticket ticket, String username) throws RemoveException {
+  public boolean removeTicket(Ticket ticket, String username) throws RemoveException, SQLException {
     if (ticket == null) {
       throw new RemoveException("Удаляемый элемент не может быть null.");
     }
 
-    try (PreparedStatement statement =
-        connection.prepareStatement("DELETE FROM tickets WHERE id = ? and owner_username = ?")) {
+    if (!username.equals(ticket.getOwnerUsername())) {
+      throw new RemoveException("Невозможно удалить билет, который не принадлежит вам.");
+    }
+
+    try (PreparedStatement statement = connection.prepareStatement(DELETE_TICKET_QUERY)) {
       statement.setInt(1, ticket.getId());
       statement.setString(2, ticket.getOwnerUsername());
 
       int removedRows = statement.executeUpdate();
 
-      if (removedRows > 0 && username.equals(ticket.getOwnerUsername())) {
+      if (removedRows > 0) {
         updateLastModifiedTime();
         return collection.remove(ticket);
       }
       return false;
     } catch (SQLException e) {
       logger.error("Возникла ошибка при удалении билета: " + e.getMessage());
-      return false;
+      throw new SQLException("Возникла ошибка при удалении билета: " + e.getMessage());
     }
   }
 
   @Override
-  public Ticket removeHead(String username) throws RemoveException {
+  public Ticket removeHead(String username) throws RemoveException, SQLException {
     Ticket ticket = collection.getFirst();
     if (removeTicket(ticket, username)) {
       updateLastModifiedTime();
@@ -559,7 +566,7 @@ public class SqlCollectionManager implements CollectionManager {
   }
 
   @Override
-  public void removeLower(Ticket ticket, String username) throws RemoveException {
+  public void removeLower(Ticket ticket, String username) throws RemoveException, SQLException {
     if (ticket == null) {
       throw new RemoveException("Не может быть элементов меньше null.");
     }

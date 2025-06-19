@@ -61,6 +61,10 @@ public class UDPClient implements ClientControl {
 
           System.out.println("[CLIENT] Ответ: " + response.getMessage());
 
+          if (response instanceof ResponseWithException) {
+            System.out.println(((ResponseWithException) response).getException().getMessage());
+          }
+
           if (response instanceof ResponseWithAuthCredentials) {
             auth = ((ResponseWithAuthCredentials) response).getAuth();
           }

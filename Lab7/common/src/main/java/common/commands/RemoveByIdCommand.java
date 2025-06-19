@@ -10,6 +10,7 @@ import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
 import common.network.ResponseWithException;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "remove_by_id".
@@ -56,7 +57,7 @@ public class RemoveByIdCommand implements Command {
       Ticket ticket = collectionManager.getById(id);
       collectionManager.removeTicket(ticket, request.getAuth().username());
       return new Response("Удален элемент с id=" + id);
-    } catch (WrongArgumentException | NumberFormatException | RemoveException e) {
+    } catch (WrongArgumentException | NumberFormatException | RemoveException | SQLException e) {
       return new ResponseWithException(e);
     }
   }

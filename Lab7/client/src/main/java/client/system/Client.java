@@ -1,8 +1,6 @@
 package client.system;
 
 import client.UDPClient;
-import client.system.placeholders.PlaceholderCollectionManager;
-import client.system.placeholders.PlaceholderUserManager;
 import common.managers.*;
 import java.io.IOException;
 import java.util.Scanner;
@@ -20,8 +18,6 @@ public class Client {
       int port = Integer.parseInt(args[1]);
       ScannerManager scannerManager = new ScannerManager(new Scanner(System.in));
       ScriptManager scriptManager = new ScriptManager(scannerManager);
-      CollectionManager collectionManager = new PlaceholderCollectionManager();
-      UserManager userManager = new PlaceholderUserManager();
       CommandManager commandManager = new CommandManager(null, scriptManager, scannerManager, null);
       UDPClient udpClient = new UDPClient(host, port, commandManager, scriptManager);
       udpClient.runClient();

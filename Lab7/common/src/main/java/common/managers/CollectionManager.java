@@ -30,9 +30,9 @@ public interface CollectionManager {
   boolean updateTicket(int id, Ticket newTicket, String username)
       throws WrongArgumentException, SQLException;
 
-  boolean removeTicket(Ticket ticket, String username) throws RemoveException;
+  boolean removeTicket(Ticket ticket, String username) throws RemoveException, SQLException;
 
-  Ticket removeHead(String username) throws RemoveException;
+  Ticket removeHead(String username) throws RemoveException, SQLException;
 
   float getAveragePrice();
 
@@ -42,7 +42,7 @@ public interface CollectionManager {
 
   Ticket getMaxTicket();
 
-  void removeLower(Ticket ticket, String username) throws RemoveException;
+  void removeLower(Ticket ticket, String username) throws RemoveException, SQLException;
 
   List<Ticket> getTicketsList();
 }

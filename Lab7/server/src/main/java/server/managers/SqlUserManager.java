@@ -11,12 +11,17 @@ import org.apache.logging.log4j.Logger;
 public class SqlUserManager implements UserManager {
   private static final Logger logger = LogManager.getLogger();
   private final Connection connection;
-  private final String CREATE_TABLE_QUERY =
+  private static final String CREATE_TABLE_QUERY =
       "CREATE TABLE IF NOT EXISTS users ("
           + "id SERIAL PRIMARY KEY,"
           + "username TEXT UNIQUE NOT NULL,"
           + "password TEXT NOT NULL,"
           + "salt varchar(64) NOT NULL)";
+  private static final String SELECT_AUTH_QUERY =
+      "SELECT id, password, salt FROM users WHERE username = ?";
+  private static final String INSERT_AUTH_QUERY =
+      "INSERT INTO users (username, password, salt) VALUES (?, ?, ?) RETURNING id";
+  private static final String SELECT_USERNAME_QUERY = "SELECT username FROM users WHERE id = ?";
 
   public SqlUserManager(Connection connection) throws SQLException {
     this.connection = connection;
@@ -27,8 +32,7 @@ public class SqlUserManager implements UserManager {
 
   @Override
   public Integer authenticate(AuthCredentials auth) {
-    try (PreparedStatement statement =
-        connection.prepareStatement("SELECT id, password, salt FROM users WHERE username = ?")) {
+    try (PreparedStatement statement = connection.prepareStatement(SELECT_AUTH_QUERY)) {
       statement.setString(1, auth.username());
       ResultSet resultSet = statement.executeQuery();
       if (resultSet.next()) {
@@ -52,9 +56,7 @@ public class SqlUserManager implements UserManager {
 
   @Override
   public Integer register(AuthCredentials auth) {
-    try (PreparedStatement statement =
-        connection.prepareStatement(
-            "INSERT INTO users (username, password, salt) VALUES (?, ?, ?) RETURNING id")) {
+    try (PreparedStatement statement = connection.prepareStatement(INSERT_AUTH_QUERY)) {
       String salt = PasswordUtils.generateSalt(32);
       String hashPassword = PasswordUtils.hashPassword(auth.password(), salt);
       statement.setString(1, auth.username());
@@ -76,8 +78,7 @@ public class SqlUserManager implements UserManager {
 
   @Override
   public String getUsernameById(int userId) {
-    try (PreparedStatement statement =
-        connection.prepareStatement("SELECT username FROM users WHERE id = ?")) {
+    try (PreparedStatement statement = connection.prepareStatement(SELECT_USERNAME_QUERY)) {
       statement.setInt(1, userId);
       ResultSet resultSet = statement.executeQuery();
       if (resultSet.next()) {
