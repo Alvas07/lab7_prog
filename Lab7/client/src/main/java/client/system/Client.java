@@ -1,12 +1,8 @@
 package client.system;
 
 import client.UDPClient;
-import common.managers.CollectionManager;
-import common.managers.CommandManager;
-import common.managers.ScannerManager;
-import common.managers.ScriptManager;
+import common.managers.*;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.Scanner;
 
 public class Client {
@@ -20,12 +16,9 @@ public class Client {
     try {
       String host = args[0];
       int port = Integer.parseInt(args[1]);
-      InetSocketAddress serverAddress = new InetSocketAddress(host, port);
       ScannerManager scannerManager = new ScannerManager(new Scanner(System.in));
       ScriptManager scriptManager = new ScriptManager(scannerManager);
-      CollectionManager collectionManager = new PlaceholderCollectionManager();
-      CommandManager commandManager =
-          new CommandManager(collectionManager, scriptManager, scannerManager);
+      CommandManager commandManager = new CommandManager(null, scriptManager, scannerManager, null);
       UDPClient udpClient = new UDPClient(host, port, commandManager, scriptManager);
       udpClient.runClient();
     } catch (IOException e) {

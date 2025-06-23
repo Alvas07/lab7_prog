@@ -1,6 +1,7 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.RemoveException;
 import common.managers.CollectionManager;
@@ -8,6 +9,7 @@ import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
 import common.network.ResponseWithException;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "remove_head".
@@ -38,10 +40,18 @@ public class RemoveHeadCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     try {
-      Ticket head = collectionManager.removeHead();
+      Ticket head = collectionManager.removeHead(request.getAuth().username());
       return new Response("ПЕРВЫЙ ЭЛЕМЕНТ КОЛЛЕКЦИИ:\n" + head);
-    } catch (RemoveException e) {
+    } catch (RemoveException | SQLException e) {
       return new ResponseWithException(e);
     }
   }

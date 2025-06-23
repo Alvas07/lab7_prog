@@ -1,6 +1,7 @@
 package common.managers;
 
 import common.commands.*;
+import common.data.auth.AuthCredentials;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.UnknownCommandException;
 import common.network.Request;
@@ -34,8 +35,11 @@ public class CommandManager {
   public CommandManager(
       CollectionManager collectionManager,
       ScriptManager scriptManager,
-      ScannerManager scannerManager) {
+      ScannerManager scannerManager,
+      UserManager userManager) {
     commandList = new LinkedHashMap<>();
+    commandList.put("login", new LoginCommand(userManager, scannerManager, scriptManager));
+    commandList.put("register", new RegisterCommand(userManager, scannerManager, scriptManager));
     commandList.put("help", new HelpCommand(collectionManager));
     commandList.put("info", new InfoCommand(collectionManager));
     commandList.put("show", new ShowCommand(collectionManager));
@@ -53,7 +57,7 @@ public class CommandManager {
     commandList.put("average_of_price", new AverageOfPriceCommand(collectionManager));
   }
 
-  public Request convertInputToCommandRequest(String line)
+  public Request convertInputToCommandRequest(String line, AuthCredentials auth)
       throws UnknownCommandException, CommandExecuteException {
     String[] parts = line.strip().trim().split("\\s+", 2);
     String commandName = parts[0];
@@ -64,17 +68,11 @@ public class CommandManager {
     }
     Command command = commandList.get(commandName);
     RequestBody body = command.packageBody(args);
-    return new Request(commandName, body);
+    return new Request(commandName, body, auth);
   }
 
   public Response executeRequest(Request request) {
     Command command = commandList.get(request.getCommandName());
-
-    if (request.getCommandName().equals("save")) {
-      return new Response(
-          "Недостаточно прав. Команда 'save' может быть использована только на сервере.");
-    }
-
     return command.execute(request);
   }
 

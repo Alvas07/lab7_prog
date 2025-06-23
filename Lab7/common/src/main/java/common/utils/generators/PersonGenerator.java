@@ -46,18 +46,14 @@ public class PersonGenerator extends ObjectGenerator<Person> {
   public Person create() throws ObjectCreationException {
     String choice =
         askValue(
-                "Добавить пассажира? (1 - Да, 2 - Нет): ",
-                s ->
-                    (s.equals("1")
-                        || s.equals("2")
-                        || s.equalsIgnoreCase("да")
-                        || s.equalsIgnoreCase("нет")),
+                "Добавить пассажира? (1 - Да, создать нового, 2 - Да, выбрать по id, 3 - Нет): ",
+                s -> (s.equals("1") || s.equals("2") || s.equals("3")),
                 s -> s,
                 scriptManager,
                 scannerManager)
             .toLowerCase();
     return switch (choice) {
-      case "1", "да" -> {
+      case "1" -> {
         System.out.println("Добро пожаловать в Формирователь пассажира.");
         yield new Person(
             askValue(
@@ -80,7 +76,19 @@ public class PersonGenerator extends ObjectGenerator<Person> {
                 scannerManager),
             askLocation());
       }
-      case "2", "нет" -> null;
+      case "2" -> {
+        int id =
+            askValue(
+                "ID пассажира: ",
+                x -> (x != null && x > 0),
+                Integer::parseInt,
+                scriptManager,
+                scannerManager);
+        Person person = new Person(null, 0, null, null);
+        person.setId(id);
+        yield person;
+      }
+      case "3" -> null;
       default -> throw new ObjectCreationException("Некорректный выбор.");
     };
   }

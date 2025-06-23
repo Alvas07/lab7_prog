@@ -16,6 +16,7 @@ import java.io.Serializable;
  * @since 1.0
  */
 public class Location implements Serializable {
+  private int id = 0;
   private Long x; // Поле не может быть null
   private Long y; // Поле не может быть null
   private Integer z; // Поле не может быть null
@@ -42,6 +43,14 @@ public class Location implements Serializable {
     this.x = x;
     this.y = y;
     this.z = z;
+  }
+
+  public Integer getId() {
+    return id;
+  }
+
+  public void setId(Integer id) {
+    this.id = id;
   }
 
   /**
@@ -119,6 +128,6 @@ public class Location implements Serializable {
    */
   @Override
   public String toString() {
-    return "Location{" + "x=" + x + ", y=" + y + ", z=" + z + '}';
+    return "Location{" + "id=" + id + ", x=" + x + ", y=" + y + ", z=" + z + '}';
   }
 }

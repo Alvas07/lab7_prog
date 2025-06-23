@@ -1,12 +1,10 @@
 package client;
 
+import common.data.auth.AuthCredentials;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.UnknownCommandException;
 import common.managers.*;
-import common.network.ObjectDecoder;
-import common.network.ObjectEncoder;
-import common.network.Request;
-import common.network.Response;
+import common.network.*;
 import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -23,6 +21,7 @@ public class UDPClient implements ClientControl {
   private boolean isRunning = true;
   private final CommandManager commandManager;
   private final ScriptManager scriptManager;
+  private AuthCredentials auth = null;
 
   public UDPClient(
       String host, int port, CommandManager commandManager, ScriptManager scriptManager)
@@ -36,6 +35,8 @@ public class UDPClient implements ClientControl {
     try (DatagramSocket socket = new DatagramSocket()) {
       socket.setSoTimeout(TIMEOUT_MS);
       System.out.println("[CLIENT] Установлено подключение к серверу: " + serverAddress);
+      System.out.println(
+          "[CLIENT] Зарегистрируйтесь с помощью команды 'register' или войдите с помощью команды 'login'.");
       spinLoop(socket);
     } catch (IOException e) {
       System.err.println("[CLIENT] Ошибка при подключении к серверу.");
@@ -60,6 +61,14 @@ public class UDPClient implements ClientControl {
 
           System.out.println("[CLIENT] Ответ: " + response.getMessage());
 
+          if (response instanceof ResponseWithException) {
+            System.out.println(((ResponseWithException) response).getException().getMessage());
+          }
+
+          if (response instanceof ResponseWithAuthCredentials) {
+            auth = ((ResponseWithAuthCredentials) response).getAuth();
+          }
+
           if (response.getTickets() != null && !response.getTickets().isEmpty()) {
             response.getTickets().forEach(System.out::println);
           }
@@ -80,7 +89,8 @@ public class UDPClient implements ClientControl {
 
     try {
       while (isRunning) {
-        System.out.print("> ");
+        String prompt = auth != null ? auth.username() + "> " : "> ";
+        System.out.print(prompt);
         String commandLine = scanner.nextLine().trim();
         String[] parts = commandLine.split("\\s+");
         try {
@@ -98,7 +108,7 @@ public class UDPClient implements ClientControl {
               stopClient();
             }
           } else {
-            request = commandManager.convertInputToCommandRequest(commandLine);
+            request = commandManager.convertInputToCommandRequest(commandLine, auth);
           }
 
           if (request != null) {
@@ -117,10 +127,10 @@ public class UDPClient implements ClientControl {
   }
 
   private void executeScript(String fileName, DatagramSocket socket) {
-    FileManager fileManager = new FileManager(fileName);
+    File file = new File(fileName);
     ScannerManager scannerManager = scriptManager.getScannerManager();
     boolean recursionFlag = false;
-    if (!fileManager.canRead()) {
+    if (!file.canRead()) {
       System.err.println("[CLIENT] Невозможно прочитать информацию из файла скрипта.");
     }
 
@@ -158,7 +168,7 @@ public class UDPClient implements ClientControl {
         } else {
           try {
             Request request = null;
-            request = commandManager.convertInputToCommandRequest(input);
+            request = commandManager.convertInputToCommandRequest(input, auth);
 
             if (request != null) {
               sendRequest(request, socket);

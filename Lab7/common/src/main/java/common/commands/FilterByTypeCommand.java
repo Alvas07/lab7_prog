@@ -2,6 +2,7 @@ package common.commands;
 
 import common.data.Ticket;
 import common.data.TicketType;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.managers.CollectionManager;
 import common.network.Request;
@@ -41,6 +42,14 @@ public class FilterByTypeCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     String[] args = request.getRequestBody().getArgs();
 
     try {

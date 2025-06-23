@@ -2,7 +2,6 @@ package common.utils.generators;
 
 import common.data.*;
 import common.exceptions.ObjectCreationException;
-import common.managers.IdManager;
 import common.managers.ScannerManager;
 import common.managers.ScriptManager;
 import java.time.LocalDate;
@@ -16,25 +15,20 @@ import java.time.LocalDate;
  * @since 1.0
  */
 public class TicketGenerator extends ObjectGenerator<Ticket> {
-  private final IdManager idManager;
   private final ScriptManager scriptManager;
   private final ScannerManager scannerManager;
 
   /**
    * Конструктор генератора билетов.
    *
-   * @param idManager менеджер {@code id}.
    * @param scriptManager менеджер выполнения скриптов.
    * @param scannerManager менеджер сканеров.
-   * @see IdManager
+   * @author Alvas
    * @see ScriptManager
    * @see ScannerManager
-   * @author Alvas
    * @since 2.0
    */
-  public TicketGenerator(
-      IdManager idManager, ScriptManager scriptManager, ScannerManager scannerManager) {
-    this.idManager = idManager;
+  public TicketGenerator(ScriptManager scriptManager, ScannerManager scannerManager) {
     this.scriptManager = scriptManager;
     this.scannerManager = scannerManager;
   }
@@ -52,7 +46,7 @@ public class TicketGenerator extends ObjectGenerator<Ticket> {
   public Ticket create() throws ObjectCreationException {
     System.out.println("Добро пожаловать в Формирователь билета.");
     return new Ticket(
-        idManager.getAndIncrement(),
+        0,
         askValue(
             "Наименование (string, not null, not empty): ",
             x -> (x != null && !x.isEmpty()),

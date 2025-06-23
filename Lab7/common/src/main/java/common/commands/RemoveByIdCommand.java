@@ -1,6 +1,7 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.exceptions.RemoveException;
 import common.exceptions.WrongArgumentException;
@@ -9,6 +10,7 @@ import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
 import common.network.ResponseWithException;
+import java.sql.SQLException;
 
 /**
  * Класс, отвечающий за команду "remove_by_id".
@@ -40,14 +42,22 @@ public class RemoveByIdCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     String[] args = request.getRequestBody().getArgs();
 
     try {
       int id = Integer.parseInt(args[0]);
       Ticket ticket = collectionManager.getById(id);
-      collectionManager.removeTicket(ticket);
+      collectionManager.removeTicket(ticket, request.getAuth().username());
       return new Response("Удален элемент с id=" + id);
-    } catch (WrongArgumentException | NumberFormatException | RemoveException e) {
+    } catch (WrongArgumentException | NumberFormatException | RemoveException | SQLException e) {
       return new ResponseWithException(e);
     }
   }

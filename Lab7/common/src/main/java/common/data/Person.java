@@ -19,6 +19,7 @@ import java.io.Serializable;
  * @since 1.0
  */
 public class Person implements Serializable {
+  private int id = 0;
   private Float height; // Поле не может быть null, Значение поля должно быть больше 0
   private int weight; // Значение поля должно быть больше 0
   private String passportID; // Длина строки не должна быть больше 28, Поле может быть null
@@ -48,6 +49,14 @@ public class Person implements Serializable {
     this.weight = weight;
     this.passportID = passportID;
     this.location = location;
+  }
+
+  public Integer getId() {
+    return id;
+  }
+
+  public void setId(Integer id) {
+    this.id = id;
   }
 
   /**
@@ -148,7 +157,9 @@ public class Person implements Serializable {
   @Override
   public String toString() {
     return "Person{"
-        + "height="
+        + "id="
+        + id
+        + ", height="
         + height
         + ", weight="
         + weight

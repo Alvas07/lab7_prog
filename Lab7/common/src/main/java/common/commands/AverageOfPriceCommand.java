@@ -1,11 +1,13 @@
 package common.commands;
 
 import common.data.Ticket;
+import common.exceptions.AuthenticationException;
 import common.exceptions.CommandExecuteException;
 import common.managers.CollectionManager;
 import common.network.Request;
 import common.network.RequestBody;
 import common.network.Response;
+import common.network.ResponseWithException;
 
 /**
  * Класс, отвечающий за команду "average_of_price".
@@ -37,6 +39,14 @@ public class AverageOfPriceCommand implements Command {
 
   @Override
   public Response execute(Request request) {
+    if (request.getAuth() == null) {
+      return new ResponseWithException(
+          new AuthenticationException(
+              "Команда "
+                  + request.getCommandName()
+                  + " доступна только авторизованным пользователям."));
+    }
+
     return new Response(
         "Cредняя цена по всем элементам коллекции равна " + collectionManager.getAveragePrice());
   }
