@@ -3,6 +3,7 @@ package common.network;
 import common.data.auth.AuthCredentials;
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.UUID;
 
 public class Request implements Serializable {
   @Serial private static final long serialVersionUID = 98795723595203572L;
@@ -10,11 +11,13 @@ public class Request implements Serializable {
   private final String commandName;
   private final RequestBody requestBody;
   private final AuthCredentials auth;
+  private final UUID requestId;
 
   public Request(String commandName, RequestBody requestBody, AuthCredentials auth) {
     this.commandName = commandName;
     this.requestBody = requestBody;
     this.auth = auth;
+    this.requestId = UUID.randomUUID();
   }
 
   public String getCommandName() {
@@ -27,5 +30,9 @@ public class Request implements Serializable {
 
   public AuthCredentials getAuth() {
     return auth;
+  }
+
+  public UUID getRequestId() {
+    return requestId;
   }
 }

@@ -45,14 +45,15 @@ public class RemoveHeadCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     try {
       Ticket head = collectionManager.removeHead(request.getAuth().username());
-      return new Response("ПЕРВЫЙ ЭЛЕМЕНТ КОЛЛЕКЦИИ:\n" + head);
+      return new Response("ПЕРВЫЙ ЭЛЕМЕНТ КОЛЛЕКЦИИ:\n" + head, request.getRequestId());
     } catch (RemoveException | SQLException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

@@ -44,11 +44,13 @@ public class AverageOfPriceCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     return new Response(
-        "Cредняя цена по всем элементам коллекции равна " + collectionManager.getAveragePrice());
+        "Cредняя цена по всем элементам коллекции равна " + collectionManager.getAveragePrice(),
+        request.getRequestId());
   }
 
   @Override

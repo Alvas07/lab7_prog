@@ -59,13 +59,15 @@ public class RemoveLowerCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
-      return new ResponseWithException(new CommandExecuteException("Ожидался билет Ticket."));
+      return new ResponseWithException(
+          new CommandExecuteException("Ожидался билет Ticket."), request.getRequestId());
     }
 
     int size = collectionManager.getCollectionSize();
@@ -75,9 +77,10 @@ public class RemoveLowerCommand implements Command {
       return new Response(
           "Удалено "
               + (size - collectionManager.getCollectionSize())
-              + " элементов, меньших заданного.");
+              + " элементов, меньших заданного.",
+          request.getRequestId());
     } catch (RemoveException | SQLException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

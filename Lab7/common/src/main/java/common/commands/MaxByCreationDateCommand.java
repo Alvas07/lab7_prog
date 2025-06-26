@@ -45,14 +45,16 @@ public class MaxByCreationDateCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     try {
       return new Response(
-          "МАКСИМАЛЬНЫЙ ЭЛЕМЕНТ ПО ДАТЕ СОЗДАНИЯ:\n" + collectionManager.getMaxByDate());
+          "МАКСИМАЛЬНЫЙ ЭЛЕМЕНТ ПО ДАТЕ СОЗДАНИЯ:\n" + collectionManager.getMaxByDate(),
+          request.getRequestId());
     } catch (EmptyCollectionException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

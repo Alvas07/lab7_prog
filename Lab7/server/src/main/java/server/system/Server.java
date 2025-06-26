@@ -38,7 +38,7 @@ public class Server {
       CollectionManager collectionManager = new SqlCollectionManager(connection);
       CommandManager commandManager =
           new CommandManager(collectionManager, null, null, userManager);
-      UDPServer udpServer = new UDPServer(commandManager, collectionManager);
+      UDPServer udpServer = new UDPServer(commandManager, "230.0.0.1", 4446);
       udpServer.runServer(port);
     } catch (NumberFormatException e) {
       System.err.println("Порт должен быть целым числом.");

@@ -58,13 +58,15 @@ public class UpdateCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
-      return new ResponseWithException(new CommandExecuteException("Ожидался билет Ticket."));
+      return new ResponseWithException(
+          new CommandExecuteException("Ожидался билет Ticket."), request.getRequestId());
     }
 
     String[] args = body.getArgs();
@@ -73,9 +75,9 @@ public class UpdateCommand implements Command {
       int id = Integer.parseInt(args[0]);
       Ticket ticket = ((RequestBodyWithTicket) body).getTicket();
       collectionManager.updateTicket(id, ticket, request.getAuth().username());
-      return new Response("Элемент с id=" + id + " обновлен.");
+      return new Response("Элемент с id=" + id + " обновлен.", request.getRequestId());
     } catch (NumberFormatException | WrongArgumentException | SQLException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 
