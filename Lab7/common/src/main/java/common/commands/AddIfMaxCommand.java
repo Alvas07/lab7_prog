@@ -60,13 +60,15 @@ public class AddIfMaxCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
-      return new ResponseWithException(new CommandExecuteException("Ожидался билет Ticket."));
+      return new ResponseWithException(
+          new CommandExecuteException("Ожидался билет Ticket."), request.getRequestId());
     }
 
     Ticket maxTicket = collectionManager.getMaxTicket();
@@ -76,15 +78,15 @@ public class AddIfMaxCommand implements Command {
       ticket.setOwnerUsername(request.getAuth().username());
       if (maxTicket == null || collectionManager.getCollection().isEmpty()) {
         collectionManager.addTicket(ticket);
-        return new Response("Билет успешно добавлен.");
+        return new Response("Билет успешно добавлен.", request.getRequestId());
       } else if (ticket.compareTo(maxTicket) > 0) {
         collectionManager.addTicket(ticket);
-        return new Response("Билет успешно добавлен.");
+        return new Response("Билет успешно добавлен.", request.getRequestId());
       } else {
-        return new Response("Билет не был добавлен.");
+        return new Response("Билет не был добавлен.", request.getRequestId());
       }
     } catch (WrongArgumentException | SQLException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

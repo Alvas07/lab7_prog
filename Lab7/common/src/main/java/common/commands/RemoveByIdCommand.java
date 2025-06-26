@@ -47,7 +47,8 @@ public class RemoveByIdCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     String[] args = request.getRequestBody().getArgs();
@@ -56,9 +57,9 @@ public class RemoveByIdCommand implements Command {
       int id = Integer.parseInt(args[0]);
       Ticket ticket = collectionManager.getById(id);
       collectionManager.removeTicket(ticket, request.getAuth().username());
-      return new Response("Удален элемент с id=" + id);
+      return new Response("Удален элемент с id=" + id, request.getRequestId());
     } catch (WrongArgumentException | NumberFormatException | RemoveException | SQLException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

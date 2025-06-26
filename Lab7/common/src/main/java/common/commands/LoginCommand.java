@@ -29,10 +29,12 @@ public class LoginCommand implements Command {
     Integer currentId = userManager.authenticate(auth);
 
     if (currentId == null) {
-      return new ResponseWithException(new AuthenticationException("Неверный логин или пароль."));
+      return new ResponseWithException(
+          new AuthenticationException("Неверный логин или пароль."), request.getRequestId());
     }
 
-    return new ResponseWithAuthCredentials(auth, "Авторизация прошла успешно.");
+    return new ResponseWithAuthCredentials(
+        auth, "Авторизация прошла успешно.", request.getRequestId());
   }
 
   @Override

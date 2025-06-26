@@ -43,7 +43,8 @@ public class HelpCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     CommandManager commandManager = new CommandManager(collectionManager, null, null, null);
@@ -55,7 +56,7 @@ public class HelpCommand implements Command {
       sb.append(command.getName()).append(" - ").append(command.getDescription()).append("\n");
     }
 
-    return new Response(sb.toString().trim());
+    return new Response(sb.toString().trim(), request.getRequestId());
   }
 
   @Override

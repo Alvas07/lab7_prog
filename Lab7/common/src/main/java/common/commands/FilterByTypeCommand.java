@@ -47,7 +47,8 @@ public class FilterByTypeCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     String[] args = request.getRequestBody().getArgs();
@@ -56,13 +57,16 @@ public class FilterByTypeCommand implements Command {
       TicketType type = TicketType.valueOf(args[0].toUpperCase());
       List<Ticket> filteredTickets = collectionManager.getFilteredByType(type);
       if (filteredTickets.isEmpty()) {
-        return new Response("Элементов, соответствующих данному типу, не найдено.");
+        return new Response(
+            "Элементов, соответствующих данному типу, не найдено.", request.getRequestId());
       } else {
         return new Response(
-            "ЭЛЕМЕНТЫ С ТИПОМ БИЛЕТА " + type.name().toUpperCase() + ":", filteredTickets);
+            "ЭЛЕМЕНТЫ С ТИПОМ БИЛЕТА " + type.name().toUpperCase() + ":",
+            filteredTickets,
+            request.getRequestId());
       }
     } catch (IllegalArgumentException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

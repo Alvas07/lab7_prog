@@ -30,10 +30,11 @@ public class RegisterCommand implements Command {
 
     if (newId == null) {
       return new ResponseWithException(
-          new RegistrationException("Данное имя пользователя уже занято."));
+          new RegistrationException("Данное имя пользователя уже занято."), request.getRequestId());
     }
 
-    return new ResponseWithAuthCredentials(auth, "Регистрация прошла успешно.");
+    return new ResponseWithAuthCredentials(
+        auth, "Регистрация прошла успешно.", request.getRequestId());
   }
 
   @Override

@@ -43,13 +43,15 @@ public class ShowCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     if (collectionManager.getCollectionSize() == 0) {
-      return new Response("Коллекция пуста.");
+      return new Response("Коллекция пуста.", request.getRequestId());
     } else {
-      return new Response("ЭЛЕМЕНТЫ КОЛЛЕКЦИИ:", collectionManager.getTicketsList());
+      return new Response(
+          "ЭЛЕМЕНТЫ КОЛЛЕКЦИИ:", collectionManager.getTicketsList(), request.getRequestId());
     }
   }
 

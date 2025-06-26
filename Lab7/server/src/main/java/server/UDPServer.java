@@ -1,6 +1,5 @@
 package server;
 
-import common.managers.CollectionManager;
 import common.managers.CommandManager;
 import common.network.ObjectDecoder;
 import common.network.ObjectEncoder;
@@ -12,10 +11,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -27,11 +27,13 @@ public class UDPServer {
   private final int BUFFER_SIZE = 65535;
   private final int SELECTOR_TIMEOUT = 100;
   private final CommandManager commandManager;
-  private final CollectionManager collectionManager;
   private static final Logger logger = LogManager.getLogger();
   private final BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
   private final AtomicBoolean isRunning = new AtomicBoolean(true);
-  private final ReentrantLock selectorLock = new ReentrantLock();
+
+  // активные пользователи: имя пользователя -> адрес
+  private final ConcurrentHashMap<String, InetSocketAddress> activeUsers =
+      new ConcurrentHashMap<>();
 
   // чтение запросов
   private final ExecutorService readPool = Executors.newCachedThreadPool();
@@ -40,9 +42,8 @@ public class UDPServer {
   // отправка ответов
   private final ExecutorService sendPool = Executors.newCachedThreadPool();
 
-  public UDPServer(CommandManager commandManager, CollectionManager collectionManager) {
+  public UDPServer(CommandManager commandManager) {
     this.commandManager = commandManager;
-    this.collectionManager = collectionManager;
   }
 
   public void runServer(int port) throws IOException {
@@ -82,7 +83,7 @@ public class UDPServer {
                 receiveBuffer.get(data);
                 receiveBuffer.clear();
 
-                readPool.execute(() -> handleData(data, clientAddress, selector));
+                readPool.execute(() -> handleData(data, clientAddress));
               }
             }
           } catch (IOException e) {
@@ -93,10 +94,20 @@ public class UDPServer {
     }
   }
 
-  private void handleData(byte[] data, InetSocketAddress clientAddress, Selector selector) {
+  private void handleData(byte[] data, InetSocketAddress clientAddress) {
     try {
       Request request = (Request) ObjectDecoder.decodeObject(ByteBuffer.wrap(data));
       logger.info("Получен запрос с командой " + request.getCommandName());
+
+      if (!request.getCommandName().equals("login")
+          && !request.getCommandName().equals("register")) {
+        // сохраняем информацию об активном пользователе
+        String username = request.getAuth().username();
+        activeUsers.put(username, clientAddress);
+      } else {
+        String username = request.getRequestBody().getArg(0);
+        activeUsers.put(username, clientAddress);
+      }
 
       processPool.execute(() -> processRequest(new RequestTask(request, clientAddress)));
     } catch (IOException | ClassNotFoundException e) {
@@ -107,7 +118,18 @@ public class UDPServer {
   private void processRequest(RequestTask task) {
     logger.info("Обработка запроса с командой " + task.request().getCommandName());
     Response response = commandManager.executeRequest(task.request());
-    sendPool.execute(() -> sendResponse(new ResponseTask(response, task.clientAddress())));
+
+    if (response.getResponseType().equals(Response.ResponseType.NORMAL)) {
+      sendPool.execute(() -> sendResponse(new ResponseTask(response, task.clientAddress())));
+    } else {
+      sendPool.execute(() -> broadcastMessage(new ResponseTask(response, task.clientAddress())));
+      sendResponse(
+          new ResponseTask(
+              new Response(
+                  "Сообщение успешно отправлено всем активным пользователям",
+                  task.request().getRequestId()),
+              task.clientAddress()));
+    }
   }
 
   private void sendResponse(ResponseTask task) {
@@ -117,6 +139,17 @@ public class UDPServer {
       logger.info("Сервер отправил ответ клиенту: " + task.response().getMessage());
     } catch (IOException e) {
       logger.error("Возникла ошибка при отправке ответа клиенту: " + e.getMessage());
+    }
+  }
+
+  private void broadcastMessage(ResponseTask task) {
+    // копия адресов для безопасного итерирования
+    List<InetSocketAddress> addresses = new ArrayList<>(activeUsers.values());
+
+    for (InetSocketAddress address : addresses) {
+      if (!address.equals(task.clientAddress())) {
+        sendPool.execute(() -> sendResponse(new ResponseTask(task.response(), address)));
+      }
     }
   }
 

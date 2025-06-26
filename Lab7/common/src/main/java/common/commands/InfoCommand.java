@@ -41,7 +41,8 @@ public class InfoCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     StringBuilder sb = new StringBuilder();
@@ -58,7 +59,7 @@ public class InfoCommand implements Command {
         .append("Дата последнего изменения: ")
         .append(collectionManager.getLastUpdateTime());
 
-    return new Response(sb.toString().trim());
+    return new Response(sb.toString().trim(), request.getRequestId());
   }
 
   @Override

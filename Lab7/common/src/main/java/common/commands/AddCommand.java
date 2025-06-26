@@ -59,22 +59,24 @@ public class AddCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     RequestBody body = request.getRequestBody();
 
     if (!(body instanceof RequestBodyWithTicket)) {
-      return new ResponseWithException(new CommandExecuteException("Ожидался билет Ticket."));
+      return new ResponseWithException(
+          new CommandExecuteException("Ожидался билет Ticket."), request.getRequestId());
     }
 
     try {
       Ticket ticket = ((RequestBodyWithTicket) body).getTicket();
       ticket.setOwnerUsername(request.getAuth().username());
       collectionManager.addTicket(ticket);
-      return new Response("Билет успешно добавлен.");
+      return new Response("Билет успешно добавлен.", request.getRequestId());
     } catch (WrongArgumentException | SQLException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

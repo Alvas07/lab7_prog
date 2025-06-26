@@ -42,14 +42,15 @@ public class ClearCommand implements Command {
           new AuthenticationException(
               "Команда "
                   + request.getCommandName()
-                  + " доступна только авторизованным пользователям."));
+                  + " доступна только авторизованным пользователям."),
+          request.getRequestId());
     }
 
     try {
       collectionManager.clearCollection(request.getAuth().username());
-      return new Response("Коллекция очищена.");
+      return new Response("Коллекция очищена.", request.getRequestId());
     } catch (SQLException e) {
-      return new ResponseWithException(e);
+      return new ResponseWithException(e, request.getRequestId());
     }
   }
 

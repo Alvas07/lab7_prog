@@ -13,15 +13,21 @@ import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
+import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class UDPClient implements ClientControl {
   private final int BUFFER_SIZE = 65535;
   private final int TIMEOUT_MS = 10000;
   private final InetSocketAddress serverAddress;
-  private boolean isRunning = true;
+  private AtomicBoolean isRunning = new AtomicBoolean(true);
   private final CommandManager commandManager;
   private final ScriptManager scriptManager;
   private AuthCredentials auth = null;
+  private Thread receiverThread;
+  private final ConcurrentMap<UUID, CompletableFuture<Response>> pendingRequests =
+      new ConcurrentHashMap<>();
 
   public UDPClient(
       String host, int port, CommandManager commandManager, ScriptManager scriptManager)
@@ -37,50 +43,109 @@ public class UDPClient implements ClientControl {
       System.out.println("[CLIENT] Установлено подключение к серверу: " + serverAddress);
       System.out.println(
           "[CLIENT] Зарегистрируйтесь с помощью команды 'register' или войдите с помощью команды 'login'.");
+
+      startReceiverThread(socket);
+
       spinLoop(socket);
     } catch (IOException e) {
       System.err.println("[CLIENT] Ошибка при подключении к серверу.");
     }
   }
 
-  private void sendRequest(Request request, DatagramSocket socket) throws IOException {
+  private void startReceiverThread(DatagramSocket socket) {
+    receiverThread =
+        new Thread(
+            () -> {
+              ByteBuffer receiveBuffer = ByteBuffer.allocate(BUFFER_SIZE);
+              DatagramPacket receivePacket =
+                  new DatagramPacket(receiveBuffer.array(), receiveBuffer.array().length);
+
+              while (isRunning.get()) {
+                try {
+                  socket.receive(receivePacket);
+                  if (receivePacket.getData() != null && receivePacket.getLength() > 0) {
+                    Response response =
+                        (Response)
+                            ObjectDecoder.decodeObject(ByteBuffer.wrap(receivePacket.getData()));
+
+                    if (response != null) {
+                      if (response.getRequestId() != null) {
+                        CompletableFuture<Response> future =
+                            pendingRequests.remove(response.getRequestId());
+                        if (future != null) {
+                          future.complete(response);
+                        }
+                      }
+
+                      if (response.getResponseType().equals(Response.ResponseType.BROADCAST)) {
+                        System.out.println("\n[BROADCAST] " + response.getMessage());
+                        showPrompt();
+                      }
+                    }
+                  }
+                } catch (SocketTimeoutException ignored) {
+                } catch (IOException | ClassNotFoundException e) {
+                  if (isRunning.get()) {
+                    System.err.println(
+                        "[CLIENT] Ошибка при приеме ответа с сервера: " + e.getMessage());
+                  }
+                }
+              }
+            });
+
+    receiverThread.setDaemon(true);
+    receiverThread.start();
+  }
+
+  private void processResponse(Response response) {
+    System.out.println("[CLIENT] Ответ: " + response.getMessage());
+
+    if (response instanceof ResponseWithException) {
+      System.out.println(((ResponseWithException) response).getException().getMessage());
+    }
+
+    if (response instanceof ResponseWithAuthCredentials) {
+      auth = ((ResponseWithAuthCredentials) response).getAuth();
+    }
+
+    if (response.getTickets() != null && !response.getTickets().isEmpty()) {
+      response.getTickets().forEach(System.out::println);
+    }
+  }
+
+  private void showPrompt() {
+    String prompt = auth != null ? auth.username() + "> " : "> ";
+    System.out.print(prompt);
+  }
+
+  private void sendMessageRequest(Request request, DatagramSocket socket) throws IOException {
     try {
       ByteBuffer sendBuffer = ObjectEncoder.encodeObject(request);
       DatagramPacket sendPacket =
           new DatagramPacket(sendBuffer.array(), sendBuffer.array().length, serverAddress);
       socket.send(sendPacket);
-
-      ByteBuffer receiveBuffer = ByteBuffer.allocate(BUFFER_SIZE);
-      DatagramPacket receivePacket =
-          new DatagramPacket(receiveBuffer.array(), receiveBuffer.array().length);
-      try {
-        socket.receive(receivePacket);
-        if (receivePacket.getData() != null) {
-          Response response =
-              (Response) ObjectDecoder.decodeObject(ByteBuffer.wrap(receivePacket.getData()));
-
-          System.out.println("[CLIENT] Ответ: " + response.getMessage());
-
-          if (response instanceof ResponseWithException) {
-            System.out.println(((ResponseWithException) response).getException().getMessage());
-          }
-
-          if (response instanceof ResponseWithAuthCredentials) {
-            auth = ((ResponseWithAuthCredentials) response).getAuth();
-          }
-
-          if (response.getTickets() != null && !response.getTickets().isEmpty()) {
-            response.getTickets().forEach(System.out::println);
-          }
-        }
-      } catch (SocketTimeoutException e) {
-        System.err.println("[CLIENT] Превышено время ожидания от сервера.");
-      } catch (IOException e) {
-        System.err.println("[CLIENT] Ошибка при передаче команды: " + e.getMessage());
+      if (request.getCommandName().equals("send_message")) {
+        System.out.println("[CLIENT] Сообщение отправлено всем активным пользователям.");
       }
-
     } catch (Exception e) {
       System.err.println("[CLIENT] Ошибка при передаче команды: " + e.getMessage());
+    }
+  }
+
+  private Response sendRequestWithTimeout(Request request, DatagramSocket socket)
+      throws TimeoutException, IOException {
+    CompletableFuture<Response> future = new CompletableFuture<>();
+    pendingRequests.put(request.getRequestId(), future);
+
+    sendMessageRequest(request, socket);
+
+    try {
+      return future.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    } catch (TimeoutException e) {
+      pendingRequests.remove(request.getRequestId());
+      throw new TimeoutException();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new IOException();
     }
   }
 
@@ -88,10 +153,12 @@ public class UDPClient implements ClientControl {
     Scanner scanner = new Scanner(System.in);
 
     try {
-      while (isRunning) {
-        String prompt = auth != null ? auth.username() + "> " : "> ";
-        System.out.print(prompt);
+      while (isRunning.get()) {
+        showPrompt();
         String commandLine = scanner.nextLine().trim();
+        if (commandLine.isEmpty()) {
+          continue;
+        }
         String[] parts = commandLine.split("\\s+");
         try {
           Request request = null;
@@ -112,10 +179,17 @@ public class UDPClient implements ClientControl {
           }
 
           if (request != null) {
-            sendRequest(request, socket);
+            if (request.getCommandName().equals("send_message")) {
+              sendMessageRequest(request, socket);
+            } else {
+              Response response = sendRequestWithTimeout(request, socket);
+              processResponse(response);
+            }
           }
         } catch (IOException e) {
           stopClient();
+        } catch (TimeoutException e) {
+          System.err.println("[CLIENT] Превышено время ожидания ответа от сервера.");
         } catch (Exception e) {
           System.err.println("[CLIENT] Непредвиденная ошибка: " + e.getMessage());
         }
@@ -171,8 +245,15 @@ public class UDPClient implements ClientControl {
             request = commandManager.convertInputToCommandRequest(input, auth);
 
             if (request != null) {
-              sendRequest(request, socket);
+              if (request.getCommandName().equals("send_message")) {
+                sendMessageRequest(request, socket);
+              } else {
+                Response response = sendRequestWithTimeout(request, socket);
+                processResponse(response);
+              }
             }
+          } catch (TimeoutException e) {
+            System.err.println("[CLIENT] Превышено время ожидания ответа от сервера.");
           } catch (UnknownCommandException | CommandExecuteException | IOException e) {
             System.out.println("[CLIENT] Непредвиденная ошибка: " + e.getMessage());
           } catch (NoSuchElementException e) {
@@ -194,6 +275,6 @@ public class UDPClient implements ClientControl {
 
   @Override
   public void stopClient() {
-    isRunning = false;
+    isRunning.set(false);
   }
 }
