@@ -6,14 +6,12 @@ import common.network.ObjectEncoder;
 import common.network.Request;
 import common.network.Response;
 import java.io.*;
-import java.net.InetSocketAddress;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.logging.log4j.LogManager;
@@ -31,9 +29,10 @@ public class UDPServer {
   private final BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
   private final AtomicBoolean isRunning = new AtomicBoolean(true);
 
-  // активные пользователи: имя пользователя -> адрес
-  private final ConcurrentHashMap<String, InetSocketAddress> activeUsers =
-      new ConcurrentHashMap<>();
+  // Multicast компоненты
+  private final InetAddress multicastGroup;
+  private final int multicastPort;
+  private MulticastSocket multicastSocket;
 
   // чтение запросов
   private final ExecutorService readPool = Executors.newCachedThreadPool();
@@ -42,8 +41,13 @@ public class UDPServer {
   // отправка ответов
   private final ExecutorService sendPool = Executors.newCachedThreadPool();
 
-  public UDPServer(CommandManager commandManager) {
+  public UDPServer(CommandManager commandManager, String multicastAddress, int multicastPort)
+      throws IOException {
     this.commandManager = commandManager;
+    this.multicastGroup = InetAddress.getByName(multicastAddress);
+    this.multicastPort = multicastPort;
+    this.multicastSocket = new MulticastSocket();
+    this.multicastSocket.joinGroup(multicastGroup);
   }
 
   public void runServer(int port) throws IOException {
@@ -98,17 +102,6 @@ public class UDPServer {
     try {
       Request request = (Request) ObjectDecoder.decodeObject(ByteBuffer.wrap(data));
       logger.info("Получен запрос с командой " + request.getCommandName());
-
-      if (!request.getCommandName().equals("login")
-          && !request.getCommandName().equals("register")) {
-        // сохраняем информацию об активном пользователе
-        String username = request.getAuth().username();
-        activeUsers.put(username, clientAddress);
-      } else {
-        String username = request.getRequestBody().getArg(0);
-        activeUsers.put(username, clientAddress);
-      }
-
       processPool.execute(() -> processRequest(new RequestTask(request, clientAddress)));
     } catch (IOException | ClassNotFoundException e) {
       logger.error("Возникла ошибка при обработке данных на сервере: " + e.getMessage());
@@ -123,12 +116,6 @@ public class UDPServer {
       sendPool.execute(() -> sendResponse(new ResponseTask(response, task.clientAddress())));
     } else {
       sendPool.execute(() -> broadcastMessage(new ResponseTask(response, task.clientAddress())));
-      sendResponse(
-          new ResponseTask(
-              new Response(
-                  "Сообщение успешно отправлено всем активным пользователям",
-                  task.request().getRequestId()),
-              task.clientAddress()));
     }
   }
 
@@ -143,13 +130,16 @@ public class UDPServer {
   }
 
   private void broadcastMessage(ResponseTask task) {
-    // копия адресов для безопасного итерирования
-    List<InetSocketAddress> addresses = new ArrayList<>(activeUsers.values());
+    try {
+      ByteBuffer sendBuffer = ObjectEncoder.encodeObject(task.response());
+      byte[] data = new byte[sendBuffer.remaining()];
+      sendBuffer.get(data);
 
-    for (InetSocketAddress address : addresses) {
-      if (!address.equals(task.clientAddress())) {
-        sendPool.execute(() -> sendResponse(new ResponseTask(task.response(), address)));
-      }
+      DatagramPacket packet = new DatagramPacket(data, data.length, multicastGroup, multicastPort);
+      multicastSocket.send(packet);
+      logger.info("Multicast сообщение отправлено в группу.");
+    } catch (IOException e) {
+      logger.error("Ошибка multicast рассылки: " + e.getMessage());
     }
   }
 

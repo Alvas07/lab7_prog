@@ -6,11 +6,9 @@ import common.exceptions.UnknownCommandException;
 import common.managers.*;
 import common.network.*;
 import java.io.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetSocketAddress;
-import java.net.SocketTimeoutException;
+import java.net.*;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.UUID;
@@ -21,35 +19,47 @@ public class UDPClient implements ClientControl {
   private final int BUFFER_SIZE = 65535;
   private final int TIMEOUT_MS = 10000;
   private final InetSocketAddress serverAddress;
+  private final InetAddress multicastGroup;
+  private final int multicastPort;
+  private DatagramSocket socket;
+  private MulticastSocket multicastSocket;
   private AtomicBoolean isRunning = new AtomicBoolean(true);
   private final CommandManager commandManager;
   private final ScriptManager scriptManager;
   private AuthCredentials auth = null;
   private Thread receiverThread;
+  private Thread multicastThread;
   private final ConcurrentMap<UUID, CompletableFuture<Response>> pendingRequests =
       new ConcurrentHashMap<>();
 
   public UDPClient(
-      String host, int port, CommandManager commandManager, ScriptManager scriptManager)
+      String host,
+      int port,
+      CommandManager commandManager,
+      ScriptManager scriptManager,
+      String multicastAddress,
+      int multicastPort)
       throws IOException {
     this.serverAddress = new InetSocketAddress(host, port);
     this.commandManager = commandManager;
     this.scriptManager = scriptManager;
+    this.multicastGroup = InetAddress.getByName(multicastAddress);
+    this.multicastPort = multicastPort;
+    this.multicastSocket = new MulticastSocket(multicastPort);
+    this.multicastSocket.joinGroup(multicastGroup);
+    this.socket = new DatagramSocket();
+    this.socket.setSoTimeout(TIMEOUT_MS);
   }
 
   public void runClient() {
-    try (DatagramSocket socket = new DatagramSocket()) {
-      socket.setSoTimeout(TIMEOUT_MS);
-      System.out.println("[CLIENT] Установлено подключение к серверу: " + serverAddress);
-      System.out.println(
-          "[CLIENT] Зарегистрируйтесь с помощью команды 'register' или войдите с помощью команды 'login'.");
+    System.out.println("[CLIENT] Установлено подключение к серверу: " + serverAddress);
+    System.out.println(
+        "[CLIENT] Зарегистрируйтесь с помощью команды 'register' или войдите с помощью команды 'login'.");
 
-      startReceiverThread(socket);
+    startReceiverThread(socket);
+    startMulticastThread();
 
-      spinLoop(socket);
-    } catch (IOException e) {
-      System.err.println("[CLIENT] Ошибка при подключении к серверу.");
-    }
+    spinLoop(socket);
   }
 
   private void startReceiverThread(DatagramSocket socket) {
@@ -64,27 +74,10 @@ public class UDPClient implements ClientControl {
                 try {
                   socket.receive(receivePacket);
                   if (receivePacket.getData() != null && receivePacket.getLength() > 0) {
-                    Response response =
-                        (Response)
-                            ObjectDecoder.decodeObject(ByteBuffer.wrap(receivePacket.getData()));
-
-                    if (response != null) {
-                      if (response.getRequestId() != null) {
-                        CompletableFuture<Response> future =
-                            pendingRequests.remove(response.getRequestId());
-                        if (future != null) {
-                          future.complete(response);
-                        }
-                      }
-
-                      if (response.getResponseType().equals(Response.ResponseType.BROADCAST)) {
-                        System.out.println("\n[BROADCAST] " + response.getMessage());
-                        showPrompt();
-                      }
-                    }
+                    processResponsePacket(receivePacket);
                   }
                 } catch (SocketTimeoutException ignored) {
-                } catch (IOException | ClassNotFoundException e) {
+                } catch (IOException e) {
                   if (isRunning.get()) {
                     System.err.println(
                         "[CLIENT] Ошибка при приеме ответа с сервера: " + e.getMessage());
@@ -95,6 +88,55 @@ public class UDPClient implements ClientControl {
 
     receiverThread.setDaemon(true);
     receiverThread.start();
+  }
+
+  private void processResponsePacket(DatagramPacket packet) {
+    try {
+      Response response =
+          (Response)
+              ObjectDecoder.decodeObject(
+                  ByteBuffer.wrap(Arrays.copyOf(packet.getData(), packet.getLength())));
+      if (response.getRequestId() != null) {
+        CompletableFuture<Response> future = pendingRequests.remove(response.getRequestId());
+        if (future != null) {
+          future.complete(response);
+        }
+      }
+    } catch (ClassNotFoundException | IOException e) {
+      System.err.println("[CLIENT] Ошибка декодирования ответа: " + e.getMessage());
+    }
+  }
+
+  private void startMulticastThread() {
+    multicastThread =
+        new Thread(
+            () -> {
+              byte[] buffer = new byte[BUFFER_SIZE];
+              DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+              String localId = socket.getLocalSocketAddress().toString();
+
+              while (isRunning.get()) {
+                try {
+                  multicastSocket.receive(packet);
+                  if (packet.getData() != null && packet.getLength() > 0) {
+                    Response response =
+                        (Response)
+                            ObjectDecoder.decodeObject(
+                                ByteBuffer.wrap(
+                                    Arrays.copyOf(packet.getData(), packet.getLength())));
+                    System.out.println("\n[BROADCAST] " + response.getMessage());
+                    showPrompt();
+                  }
+                } catch (IOException | ClassNotFoundException e) {
+                  if (isRunning.get()) {
+                    System.err.println("[CLIENT] Multicast ошибка: " + e.getMessage());
+                  }
+                }
+              }
+            });
+
+    multicastThread.setDaemon(true);
+    multicastThread.start();
   }
 
   private void processResponse(Response response) {

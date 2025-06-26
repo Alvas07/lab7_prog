@@ -19,7 +19,8 @@ public class Client {
       ScannerManager scannerManager = new ScannerManager(new Scanner(System.in));
       ScriptManager scriptManager = new ScriptManager(scannerManager);
       CommandManager commandManager = new CommandManager(null, scriptManager, scannerManager, null);
-      UDPClient udpClient = new UDPClient(host, port, commandManager, scriptManager);
+      UDPClient udpClient =
+          new UDPClient(host, port, commandManager, scriptManager, "230.0.0.1", 4446);
       udpClient.runClient();
     } catch (IOException e) {
       System.err.println("Ошибка при создании клиента.");
